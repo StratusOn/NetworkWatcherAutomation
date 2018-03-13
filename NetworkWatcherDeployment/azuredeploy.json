@@ -1,0 +1,645 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "westcentralus",
+      "metadata": {
+        "description": "The location of the resources (Azure region). Defaults to the current deployment's target location."
+      },
+      "allowedValues": [
+        "japaneast",
+        "eastus2",
+        "westeurope",
+        "southeastasia",
+        "southcentralus",
+        "brazilsouth",
+        "uksouth",
+        "westcentralus",
+        "northeurope",
+        "canadacentral",
+        "australiasoutheast",
+        "centralindia"
+      ]
+    },
+    "virtualMachinesNames": {
+      "type": "string",
+      "metadata": {
+        "description": "A comma-separated list of names of the virtual machine's for which Network Watcher is already configured. All VMs must be in the same Resource Group whose name is specified in the 'virtualMachinesResourceGroupName' parameter."
+      }
+    },
+    "virtualMachinesResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the resource group where new Storage Accounts whose usage is to be tracked will be created."
+      }
+    },
+    "networkWatchersResourceGroupName": {
+      "type": "string",
+      "defaultValue": "NetworkWatcherRG",
+      "metadata": {
+        "description": "The name of the resource group where Network Watcher resources are created for the different regions. The default is typically 'NetworkWatcherRG'."
+      }
+    },
+    "artifactsBaseUrl": {
+      "type": "string",
+      "metadata": {
+        "artifactsBaseUrl": "The base URL of the ARM Template's resources (child templates and supporting VM extension scripts). For Azure Marketplace gallery packages, this value is passed by the Azure portal."
+      },
+      "defaultValue": "https://raw.githubusercontent.com/StratusOn/NetworkWatcherAutomation/master/NetworkWatcherDeployment"
+    },
+    "artifactsBaseUrlSasToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The SAS token (including the leading '?') if artifactsBaseUrl represents an Azure Storage account. The SAS token should be setup to have at least read on the blob or read+list on the container."
+      },
+      "defaultValue": ""
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, guid(resourceGroup().id, deployment().name))]",
+    "logsStorageAccountName": "[concat('logsstorage', variables('uniqueSuffix'))]",
+    "applyRbacUrl": "[concat(parameters('artifactsBaseUrl'), '/applyRBAC.json', parameters('artifactsBaseUrlSasToken'))]",
+    "roleAssignmentId": "[guid(resourceGroup().id, deployment().name)]",
+    "networkWatcherRoleAssignmentId": "[guid(resourceGroup().id, concat(deployment().name, 'networkwatcher'))]",
+    "roleAssignmentsApiVersion": "2016-07-01",
+    "msiApiVersion": "2015-08-31-PREVIEW",
+    "eventGridApiVersion": "2018-01-01",
+    "storageApiVersion": "2016-12-01",
+    "appServiceApiVersion": "2016-08-01",
+    "hostingPlanApiVersion": "2016-09-01",
+    "deploymentsApiVersion": "2017-05-10",
+    "automationApiVersion": "2015-10-31",
+    "createGetTokenFunctionAppUrl": "https://raw.githubusercontent.com/StratusOn/MSI-GetToken-FunctionApp/master/azuredeploy.json",
+    "runbookName": "Start-NetworkWatcher",
+    "scriptUri": "[concat(parameters('artifactsBaseUrl'), '/Start-NetworkWatcher.ps1', parameters('artifactsBaseUrlSasToken'))]",
+    "runbookDescription": "Start Azure Network Watcher on the list of VMs specified.",
+    "sku": "Free",
+    "accountName": "[concat('automation-', variables('uniqueSuffix'))]",
+    "defaultMaxCaptureTimeInMinutes": 300,
+    "psModules": {
+      "AzureRmProfile": {
+        "Name": "AzureRm.Profile",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azurerm.profile.4.3.1.nupkg"
+      },
+      "AzureRmResources": {
+        "Name": "AzureRm.Resources",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azurerm.resources.5.4.0.nupkg"
+      },
+      "AzureRmAutomation": {
+        "Name": "AzureRm.Automation",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azurerm.automation.4.2.1.nupkg"
+      },
+      "AzureRmCompute": {
+        "Name": "AzureRm.Compute",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azurerm.compute.4.3.2.nupkg"
+      },
+      "AzureRmNetwork": {
+        "Name": "AzureRm.Network",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azurerm.network.5.2.0.nupkg"
+      },
+      "AzureRmStorage": {
+        "Name": "AzureRm.Storage",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azurerm.storage.4.2.1.nupkg"
+      },
+      "AzureStorage": {
+        "Name": "Azure.Storage",
+        "Url": "https://devopsgallerystorage.blob.core.windows.net/packages/azure.storage.4.1.1.nupkg"
+      }
+    },
+    "automationVariables": {
+      "TargetResourceGroup": {
+        "Name": "TargetResourceGroup",
+        "Description": "The name of the resource group where new Storage Accounts whose usage is to be tracked will be created."
+      },
+      "TargetVirtualMachines": {
+        "Name": "TargetVirtualMachines",
+        "Description": "A comma-separated list of names of the virtual machine's for which Network Watcher is already configured. All VMs must be in the same Resource Group whose name is specified in the 'TargetResourceGroup' variable."
+      },
+      "SubscriptionId": {
+        "Name": "SubscriptionId",
+        "Description": "The subscription id."
+      },
+      "TenantId": {
+        "Name": "TenantId",
+        "Description": "The MSI tenant id."
+      },
+      "MsiGetDefaultTokenEndpoint": {
+        "Name": "MsiGetDefaultTokenEndpoint",
+        "Description": "The MSI token endpoint."
+      },
+      "MaxCaptureTimeInMinutes": {
+        "Name": "MaxCaptureTimeInMinutes",
+        "Description": "The maximum amount of time, in minutes, that a packet capture should run. Default is 300 minutes (5 hours). This value cannot be more than 300 minutes (5 hours)."
+      },
+      "NetworkWatcherStorageAccountName": {
+        "Name": "NetworkWatcherStorageAccountName",
+        "Description": "The name of the Azure Storage Account where the Network Watcher packet capture logs will be written."
+      },
+      "NetworkWatcherStorageAccountResourceGroupName": {
+        "Name": "NetworkWatcherStorageAccountResourceGroupName",
+        "Description": "The name of the Resource Group that contains the Azure Storage Account where the Network Watcher packet capture logs will be written."
+      },
+      "ApplyRbacUrl": {
+        "Name": "ApplyRbacUrl",
+        "Description": "The URL of the applyRbac template."
+      },
+      "RoleAssignmentsApiVersion": {
+        "Name": "RoleAssignmentsApiVersion",
+        "Description": "The RBAC API version."
+      },
+      "MsiApiVersion": {
+        "Name": "MsiApiVersion",
+        "Description": "The API version for MSI."
+      },
+      "FunctionAppIdentityResourceId": {
+        "Name": "FunctionAppIdentityResourceId",
+        "Description": "The Principal Id of the function app."
+      }
+    }
+  },
+  "resources": [
+    {
+      "apiVersion": "[variables('storageApiVersion')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('logsStorageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "Storage",
+      "tags": {
+        "displayName": "StorageAccount",
+        "solutionName": "StartNetworkWatcherSolution"
+      },
+      "sku": {
+        "name": "Standard_LRS"
+      }
+    },
+    {
+      "name": "createGetTokenFunction",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "[variables('deploymentsApiVersion')]",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('createGetTokenFunctionAppUrl')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        }
+      }
+    },
+    {
+      "condition": "[not(equals(parameters('virtualMachinesResourceGroupName'), resourceGroup().name))]",
+      "name": "applyRbac",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "[variables('deploymentsApiVersion')]",
+      "resourceGroup": "[parameters('virtualMachinesResourceGroupName')]",
+      "dependsOn": [
+        "Microsoft.Resources/deployments/createGetTokenFunction"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('applyRbacUrl')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "roleAssignmentId": {
+            "value": "[variables('roleAssignmentId')]"
+          },
+          "roleAssignmentsApiVersion": {
+            "value": "[variables('roleAssignmentsApiVersion')]"
+          },
+          "functionAppIdentityResourceId": {
+            "value": "[reference('Microsoft.Resources/deployments/createGetTokenFunction', variables('deploymentsApiVersion')).outputs.functionAppIdentityResourceId.value]"
+          },
+          "msiApiVersion": {
+            "value": "[variables('msiApiVersion')]"
+          }
+        }
+      }
+    },
+    {
+      "condition": "[and(not(equals(parameters('networkWatchersResourceGroupName'), resourceGroup().name)), not(equals(parameters('networkWatchersResourceGroupName'), parameters('virtualMachinesResourceGroupName'))))]",
+      "name": "applyRbacToNetworkWatchersRG",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "[variables('deploymentsApiVersion')]",
+      "resourceGroup": "[parameters('networkWatchersResourceGroupName')]",
+      "dependsOn": [
+        "Microsoft.Resources/deployments/createGetTokenFunction"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('applyRbacUrl')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "roleAssignmentId": {
+            "value": "[variables('networkWatcherRoleAssignmentId')]"
+          },
+          "roleAssignmentsApiVersion": {
+            "value": "[variables('roleAssignmentsApiVersion')]"
+          },
+          "functionAppIdentityResourceId": {
+            "value": "[reference('Microsoft.Resources/deployments/createGetTokenFunction', variables('deploymentsApiVersion')).outputs.functionAppIdentityResourceId.value]"
+          },
+          "msiApiVersion": {
+            "value": "[variables('msiApiVersion')]"
+          }
+        }
+      }
+    },
+    {
+      "name": "[variables('accountName')]",
+      "type": "Microsoft.Automation/automationAccounts",
+      "apiVersion": "2015-10-31",
+      "location": "[parameters('location')]",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "AutomationAccount",
+        "solutionName": "StartNetworkWatcherSolution"
+      },
+      "properties": {
+        "sku": {
+          "name": "[variables('sku')]"
+        }
+      },
+      "resources": [
+        {
+          "name": "[variables('runbookName')]",
+          "type": "runbooks",
+          "apiVersion": "2015-10-31",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "Runbook",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "runbookType": "PowerShellWorkflow",
+            "logProgress": false,
+            "logVerbose": true,
+            "description": "[variables('runbookDescription')]",
+            "publishContentLink": {
+              "uri": "[variables('scriptUri')]",
+              "version": "1.0.0.0"
+            }
+          }
+        },
+        {
+          "name": "[variables('automationVariables').TargetResourceGroup.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "TargetResourceGroupVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('virtualMachinesResourceGroupName'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').TargetResourceGroup.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').TargetVirtualMachines.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "TargetVirtualMachinesVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('virtualMachinesNames'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').TargetVirtualMachines.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').SubscriptionId.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "SubscriptionIdVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', subscription().subscriptionId, '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').SubscriptionId.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').TenantId.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/applyRbac"
+          ],
+          "tags": {
+            "displayName": "TenantIdVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', reference('Microsoft.Resources/deployments/applyRbac', variables('deploymentsApiVersion')).outputs.identity.value.tenantId, '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').TenantId.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').MsiGetDefaultTokenEndpoint.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "MsiGetDefaultTokenEndpointVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', reference('Microsoft.Resources/deployments/createGetTokenFunction', variables('deploymentsApiVersion')).outputs.getDefaultTokenEndpoint.value, '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').MsiGetDefaultTokenEndpoint.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').MaxCaptureTimeInMinutes.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "MaxCaptureTimeInMinutesVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', variables('defaultMaxCaptureTimeInMinutes'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').MaxCaptureTimeInMinutes.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').NetworkWatcherStorageAccountName.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "NetworkWatcherStorageAccountNameVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', variables('logsStorageAccountName'), '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').NetworkWatcherStorageAccountName.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').NetworkWatcherStorageAccountResourceGroupName.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "NetworkWatcherStorageAccountResourceGroupNameVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', resourceGroup().name, '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').NetworkWatcherStorageAccountResourceGroupName.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').ApplyRbacUrl.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "ApplyRbacUrlVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', variables('applyRbacUrl'), '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').ApplyRbacUrl.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').RoleAssignmentsApiVersion.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "RoleAssignmentsApiVersionVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', variables('roleAssignmentsApiVersion'), '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').RoleAssignmentsApiVersion.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').MsiApiVersion.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "MsiApiVersionVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', variables('msiApiVersion'), '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').MsiApiVersion.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').FunctionAppIdentityResourceId.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "FunctionAppIdentityResourceIdVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', reference('Microsoft.Resources/deployments/createGetTokenFunction', variables('deploymentsApiVersion')).outputs.functionAppIdentityResourceId.value, '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').FunctionAppIdentityResourceId.Description]"
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureRmProfile.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "AzureRmProfileModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureRmProfile.Url]"
+            }
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureRmResources.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureRmProfile.Name)]"
+          ],
+          "tags": {
+            "displayName": "AzureRmResourcesModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureRMResources.Url]"
+            }
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureRmAutomation.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureRmProfile.Name)]"
+          ],
+          "tags": {
+            "displayName": "AzureRmAutomationModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureRMAutomation.Url]"
+            }
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureRmCompute.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureRmProfile.Name)]"
+          ],
+          "tags": {
+            "displayName": "AzureRmComputeModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureRmCompute.Url]"
+            }
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureRmNetwork.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureRmProfile.Name)]"
+          ],
+          "tags": {
+            "displayName": "AzureRmNetworkModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureRmNetwork.Url]"
+            }
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureStorage.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureRmProfile.Name)]"
+          ],
+          "tags": {
+            "displayName": "AzureStorageModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureStorage.Url]"
+            }
+          }
+        },
+        {
+          "name": "[variables('psModules').AzureRmStorage.Name]",
+          "type": "modules",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureRmProfile.Name)]",
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'), '/modules/', variables('psModules').AzureStorage.Name)]"
+          ],
+          "tags": {
+            "displayName": "AzureRmStorageModule",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "contentLink": {
+              "uri": "[variables('psModules').AzureRmStorage.Url]"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "outputs": {
+  }
+}
