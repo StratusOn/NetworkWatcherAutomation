@@ -183,9 +183,8 @@ workflow Start-NetworkWatcher {
                     $message = "[VM '$VmName']: Started Network Watcher capture '$packetCaptureName' on VM. The capture will stop after $MaxCaptureTimeInMinutes minutes. This runbook can be stopped to end the capture at any time."
                     echo $message
 
-                    #Write-Verbose "[VM '$VmName'] Packet Capture ($packetCaptureName):"
-                    #Write-Verbose $packetCapture
-                    #$packetCapture = Get-AzureRmNetworkWatcherPacketCapture -NetworkWatcher $networkWatcher -PacketCaptureName $packetCaptureName
+                    echo "[VM '$VmName'] Packet Capture ($packetCaptureName):"
+                    echo $packetCapture
                 }
             }
             else
