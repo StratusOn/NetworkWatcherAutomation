@@ -163,16 +163,26 @@ workflow Start-NetworkWatcher {
                 $filter1 = New-AzureRmPacketCaptureFilterConfig -Protocol UDP
                 # TODO: Allow specifying more filter conditions in Automation Account variables. For example:
                 #$filter2 = New-AzureRmPacketCaptureFilterConfig -Protocol TCP -RemoteIPAddress "1.1.1.1-255.255.255" -LocalIPAddress "10.0.0.3" -LocalPort "1-65535" -RemotePort "20;80;443"
-                $packetCaptureName = "PacketCapture-$VmName"
+                $formattedDateTime = Get-Date -format "yyyyMMdd-hhmmss"
+                $packetCaptureName = "PacketCapture-$VmName-$formattedDateTime"
                 $timeLimitInMinutes = [int]$MaxCaptureTimeInMinutes
                 $timeLimitInSeconds = $timeLimitInMinutes*60
                 $packetCapture = New-AzureRmNetworkWatcherPacketCapture -NetworkWatcher $networkWatcher -TargetVirtualMachineId $vm.Id -PacketCaptureName $packetCaptureName -StorageAccountId $storageAccount.id -TimeLimitInSeconds $timeLimitInSeconds -Filter $filter1
-                $message = "[VM '$VmName']: Started Network Watcher capture is on VM. The capture will stop after $MaxCaptureTimeInMinutes minutes. This runbook can be stopped to stop the capture at any time."
-                echo $message
+                if ($packetCapture -eq $null)
+                {
+                    $message = "[VM '$VmName']: Could not start Network Watcher capture '$packetCaptureName' on VM. If a capture with the same name already exists, delete the capture and resume this runbook."
+                    echo $message
+                    throw $message
+                }
+                else
+                {
+                    $message = "[VM '$VmName']: Started Network Watcher capture '$packetCaptureName' on VM. The capture will stop after $MaxCaptureTimeInMinutes minutes. This runbook can be stopped to end the capture at any time."
+                    echo $message
 
-                Write-Verbose "[VM '$VmName'] Packet Capture:"
-                Write-Verbose $packetCapture
-                #$packetCapture = Get-AzureRmNetworkWatcherPacketCapture -NetworkWatcher $networkWatcher -PacketCaptureName $packetCaptureName
+                    Write-Verbose "[VM '$VmName'] Packet Capture ($packetCaptureName):"
+                    Write-Verbose $packetCapture
+                    #$packetCapture = Get-AzureRmNetworkWatcherPacketCapture -NetworkWatcher $networkWatcher -PacketCaptureName $packetCaptureName
+                }
             }
             else
             {
