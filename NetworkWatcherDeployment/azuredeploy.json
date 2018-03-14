@@ -42,6 +42,46 @@
         "description": "The name of the resource group where Network Watcher resources are created for the different regions. The default is typically 'NetworkWatcherRG'."
       }
     },
+    "packetCaptureFilterProtocol": {
+      "type": "string",
+      "defaultValue": "UDP",
+      "metadata": {
+        "description": "The protocol of the packet capture filter. This can be either UDP or TCP."
+      },
+      "allowedValues": [
+        "TCP",
+        "UDP",
+        "Any"
+      ]
+    },
+    "packetCaptureFilterRemoteIpAddress": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "The remote IP address of the packet capture filter. This can be a single IP address or a range. e.g. 1.1.1.1-255.255.255.255."
+      }
+    },
+    "packetCaptureFilterRemotePort": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "The remote port of the packet capture filter. This can be a single number or semi-colon separated port numbers. e.g. 20;80;443."
+      }
+    },
+    "packetCaptureFilterLocalIpAddress": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "The local IP address of the packet capture filter. This can be a single IP address or a range. e.g. 1.1.1.1-255.255.255.255."
+      }
+    },
+    "packetCaptureFilterLocalPort": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "The local port of the packet capture filter. This can be a single number or a port range. e.g. 1-65535."
+      }
+    },
     "artifactsBaseUrl": {
       "type": "string",
       "metadata": {
@@ -72,9 +112,12 @@
     "deploymentsApiVersion": "2017-05-10",
     "automationApiVersion": "2015-10-31",
     "createGetTokenFunctionAppUrl": "https://raw.githubusercontent.com/StratusOn/MSI-GetToken-FunctionApp/master/azuredeploy.json",
-    "runbookName": "Start-NetworkWatcher",
-    "scriptUri": "[concat(parameters('artifactsBaseUrl'), '/Start-NetworkWatcher.ps1', parameters('artifactsBaseUrlSasToken'))]",
-    "runbookDescription": "Start Azure Network Watcher on the list of VMs specified.",
+    "startNetworkWatcherRunbookName": "Start-NetworkWatcher",
+    "startNetworkWatcherScriptUri": "[concat(parameters('artifactsBaseUrl'), '/Start-NetworkWatcher.ps1', parameters('artifactsBaseUrlSasToken'))]",
+    "startNetworkWatcherRunbookDescription": "Start Azure Network Watcher on the list of VMs specified.",
+    "stopNetworkWatcherRunbookName": "Stop-NetworkWatcher",
+    "stopNetworkWatcherScriptUri": "[concat(parameters('artifactsBaseUrl'), '/Stop-NetworkWatcher.ps1', parameters('artifactsBaseUrlSasToken'))]",
+    "stopNetworkWatcherRunbookDescription": "Stop Azure Network Watcher on the list of VMs specified.",
     "sku": "Free",
     "accountName": "[concat('automation-', variables('uniqueSuffix'))]",
     "defaultMaxCaptureTimeInMinutes": 300,
@@ -156,6 +199,26 @@
       "FunctionAppIdentityResourceId": {
         "Name": "FunctionAppIdentityResourceId",
         "Description": "The Principal Id of the function app."
+      },
+      "PacketCaptureFilterProtocol": {
+        "Name": "PacketCaptureFilterProtocol",
+        "Description": "The protocol of the packet capture filter. This can be either UDP or TCP."
+      },
+      "PacketCaptureFilterRemoteIpAddress": {
+        "Name": "PacketCaptureFilterRemoteIpAddress",
+        "Description": "The remote IP address of the packet capture filter. This can be a single IP address or a range. e.g. 1.1.1.1-255.255.255.255."
+      },
+      "PacketCaptureFilterRemotePort": {
+        "Name": "PacketCaptureFilterRemotePort",
+        "Description": "The remote port of the packet capture filter. This can be a single number or semi-colon separated port numbers. e.g. 20;80;443."
+      },
+      "PacketCaptureFilterLocalIpAddress": {
+        "Name": "PacketCaptureFilterLocalIpAddress",
+        "Description": "The local IP address of the packet capture filter. This can be a single IP address or a range. e.g. 1.1.1.1-255.255.255.255."
+      },
+      "PacketCaptureFilterLocalPort": {
+        "Name": "PacketCaptureFilterLocalPort",
+        "Description": "The local port of the packet capture filter. This can be a single number or a port range. e.g. 1-65535."
       }
     }
   },
@@ -270,7 +333,7 @@
       },
       "resources": [
         {
-          "name": "[variables('runbookName')]",
+          "name": "[variables('startNetworkWatcherRunbookName')]",
           "type": "runbooks",
           "apiVersion": "2015-10-31",
           "location": "[parameters('location')]",
@@ -285,9 +348,32 @@
             "runbookType": "PowerShellWorkflow",
             "logProgress": false,
             "logVerbose": true,
-            "description": "[variables('runbookDescription')]",
+            "description": "[variables('startNetworkWatcherRunbookDescription')]",
             "publishContentLink": {
-              "uri": "[variables('scriptUri')]",
+              "uri": "[variables('startNetworkWatcherScriptUri')]",
+              "version": "1.0.0.0"
+            }
+          }
+        },
+        {
+          "name": "[variables('stopNetworkWatcherRunbookName')]",
+          "type": "runbooks",
+          "apiVersion": "2015-10-31",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "Runbook",
+            "solutionName": "StopNetworkWatcherSolution"
+          },
+          "properties": {
+            "runbookType": "PowerShellWorkflow",
+            "logProgress": false,
+            "logVerbose": true,
+            "description": "[variables('stopNetworkWatcherRunbookDescription')]",
+            "publishContentLink": {
+              "uri": "[variables('stopNetworkWatcherScriptUri')]",
               "version": "1.0.0.0"
             }
           }
@@ -509,6 +595,101 @@
             "type": "string",
             "isEncrypted": true,
             "description": "[variables('automationVariables').FunctionAppIdentityResourceId.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').PacketCaptureFilterProtocol.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "PacketCaptureFilterProtocolVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('packetCaptureFilterProtocol'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').PacketCaptureFilterProtocol.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').PacketCaptureFilterRemoteIpAddress.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "PacketCaptureFilterRemoteIpAddressVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('packetCaptureFilterRemoteIpAddress'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').PacketCaptureFilterRemoteIpAddress.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').PacketCaptureFilterRemotePort.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "PacketCaptureFilterRemotePortVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('packetCaptureFilterRemotePort'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').PacketCaptureFilterRemotePort.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').PacketCaptureFilterLocalIpAddress.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "PacketCaptureFilterLocalIpAddressVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('packetCaptureFilterLocalIpAddress'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').PacketCaptureFilterLocalIpAddress.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').PacketCaptureFilterLocalPort.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]",
+            "Microsoft.Resources/deployments/createGetTokenFunction"
+          ],
+          "tags": {
+            "displayName": "PacketCaptureFilterLocalPortVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('packetCaptureFilterLocalPort'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').PacketCaptureFilterLocalPort.Description]"
           }
         },
         {

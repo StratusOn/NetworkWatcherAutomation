@@ -307,6 +307,36 @@ workflow Start-NetworkWatcher {
         Write-Error $message -ErrorAction Stop
     }
 
+    if ($packetCaptureFilterProtocol -eq '')
+    {
+        $packetCaptureFilterProtocol = "UDP"
+        echo "-- Network Watcher Filter Protocol (updated): $packetCaptureFilterProtocol"
+    }
+
+    if ($packetCaptureFilterRemoteIpAddress -eq '')
+    {
+        $packetCaptureFilterRemoteIpAddress = "1.1.1.1-255.255.255.255"
+        echo "-- Network Watcher Filter Remote IP Address (updated): $packetCaptureFilterRemoteIpAddress"
+    }
+
+    if ($packetCaptureFilterRemotePort -eq '')
+    {
+        $packetCaptureFilterRemotePort = "1-65535"
+        echo "-- Network Watcher Filter Remote Port (updated): $packetCaptureFilterRemotePort"
+    }
+
+    if ($packetCaptureFilterLocalIpAddress -eq '')
+    {
+        $packetCaptureFilterLocalIpAddress = "1.1.1.1-255.255.255.255"
+        echo "-- Network Watcher Filter Local IP Address (updated): $packetCaptureFilterLocalIpAddress"
+    }
+
+    if ($packetCaptureFilterLocalPort -eq '')
+    {
+        $packetCaptureFilterLocalPort = "1-65535"
+        echo "-- Network Watcher Filter Local Port (updated): $packetCaptureFilterLocalPort"
+    }
+
     # Get the access token.
     $accessToken = Get-AccessToken -MsiGetDefaultTokenEndpoint $msiGetDefaultTokenEndpoint -MaxRetryCount $maxRetryCount -RetryIntervalInSeconds $retryIntervalInSeconds
     Write-Verbose "Access Token: $accessToken"
@@ -325,7 +355,6 @@ workflow Start-NetworkWatcher {
         {
             Start-NetworkWatcherForVm -VmName $vmName -ResourceGroupName $targetResourceGroup -NetworkWatcherStorageAccountName $networkWatcherStorageAccountName -NetworkWatcherStorageAccountResourceGroupName $networkWatcherStorageAccountResourceGroupName -MaxCaptureTimeInMinutes $maxCaptureTimeInMinutes `
                                       -PacketCaptureFilterProtocol $packetCaptureFilterProtocol -PacketCaptureFilterRemoteIpAddress $packetCaptureFilterRemoteIpAddress -PacketCaptureFilterRemotePort $packetCaptureFilterRemotePort -PacketCaptureFilterLocalIpAddress $packetCaptureFilterLocalIpAddress -PacketCaptureFilterLocalPort $packetCaptureFilterLocalPort
-            #Start-NetworkWatcherForVm -VmName $vmName -ResourceGroupName $targetResourceGroup -NetworkWatcherStorageAccountName $networkWatcherStorageAccountName -NetworkWatcherStorageAccountResourceGroupName $networkWatcherStorageAccountResourceGroupName -MaxCaptureTimeInMinutes $maxCaptureTimeInMinutes
         }
         catch
         {
