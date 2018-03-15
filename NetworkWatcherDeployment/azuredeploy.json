@@ -184,6 +184,10 @@
         "Name": "NetworkWatcherStorageAccountResourceGroupName",
         "Description": "The name of the Resource Group that contains the Azure Storage Account where the Network Watcher packet capture logs will be written."
       },
+      "NetworkWatcherResourceGroupName": {
+        "Name": "NetworkWatcherResourceGroupName",
+        "Description": "The name of the resource group where Network Watcher resources are created for the different regions. The default is typically 'NetworkWatcherRG'."
+      },
       "ApplyRbacUrl": {
         "Name": "ApplyRbacUrl",
         "Description": "The URL of the applyRbac template."
@@ -522,6 +526,24 @@
             "type": "string",
             "isEncrypted": true,
             "description": "[variables('automationVariables').NetworkWatcherStorageAccountResourceGroupName.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').NetworkWatcherResourceGroupName.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "NetworkWatcherResourceGroupNameVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('networkWatchersResourceGroupName'), '\"')]",
+            "type": "string",
+            "isEncrypted": false,
+            "description": "[variables('automationVariables').NetworkWatcherResourceGroupName.Description]"
           }
         },
         {
