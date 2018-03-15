@@ -280,11 +280,11 @@ workflow Stop-NetworkWatcher {
     $endTime = Get-Date
     echo ("Stopping Network Watcher jobs took {0}." -f ($endTime - $startTime))
 
+    # End of runbook
+    echo "=============== Runbook completed ==============="
+
     if ($errorMessages -ne "")
     {
         Write-Error "Error(s) occurred while stopping network watchers:`n$errorMessages" -ErrorAction Stop
     }
-
-    # End of runbook
-    echo "=============== Runbook completed ==============="
 }

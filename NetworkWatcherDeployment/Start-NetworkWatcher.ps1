@@ -149,11 +149,19 @@ workflow Start-NetworkWatcher {
             # Get the VM properties, including the VM ID.
             $vm = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $VmName
             # Check whether the Network Watcher VM extension is installed.
-            $extensionName = "AzureNetworkWatcherExtension"
+            $extension = $vm.Extensions | Where {$_.VirtualMachineExtensionType -eq "NetworkWatcherAgentWindows" -or $_.VirtualMachineExtensionType -eq "NetworkWatcherAgentLinux"}
+            if ($extension -eq $null)
+            {
+                $message = "[VM '$VmName']: Skipping VM since it does not have the Network Watcher extension installed. Install the VM extension and then resume this runbook."
+                echo $message
+                throw $message
+            }
+            $extensionName = $extension.Name
+            $extensionType = $extension.VirtualMachineExtensionType
             $vmExtension = Get-AzureRmVMExtension -ResourceGroupName $ResourceGroupName -VMName $VmName -Name $extensionName
             if ($vmExtension -and $vmExtension.ProvisioningState -eq "Succeeded")
             {
-                echo "[VM '$VmName']: Found Network Watcher Extension installed on VM."
+                echo "[VM '$VmName']: Found Network Watcher Extension installed on VM. Extension Name: '$extensionName'. Type: '$extensionType'."
                 $region = $vmExtension.Location
                 $nw = Get-AzureRmResource | Where {$_.ResourceType -eq "Microsoft.Network/networkWatchers" -and $_.Location -eq "$region" }
                 if ($nw -eq $null)
@@ -366,11 +374,11 @@ workflow Start-NetworkWatcher {
     $endTime = Get-Date
     echo ("Starting Network Watcher jobs took {0}." -f ($endTime - $startTime))
 
+    # End of runbook
+    echo "=============== Runbook completed ==============="
+
     if ($errorMessages -ne "")
     {
         Write-Error "Error(s) occurred while starting network watchers:`n$errorMessages" -ErrorAction Stop
     }
-
-    # End of runbook
-    echo "=============== Runbook completed ==============="
 }
