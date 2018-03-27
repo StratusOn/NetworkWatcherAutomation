@@ -46,7 +46,7 @@
       "type": "string",
       "defaultValue": "UDP",
       "metadata": {
-        "description": "The protocol of the packet capture filter. This can be either UDP or TCP."
+        "description": "The protocol of the packet capture filter. This can be UDP, TCP or Any."
       },
       "allowedValues": [
         "TCP",
@@ -101,8 +101,8 @@
     "uniqueSuffix": "[uniqueString(resourceGroup().id, guid(resourceGroup().id, deployment().name))]",
     "logsStorageAccountName": "[concat('logsstorage', variables('uniqueSuffix'))]",
     "applyRbacUrl": "[concat(parameters('artifactsBaseUrl'), '/applyRBAC.json', parameters('artifactsBaseUrlSasToken'))]",
-    "roleAssignmentId": "[guid(resourceGroup().id, deployment().name)]",
-    "networkWatcherRoleAssignmentId": "[guid(resourceGroup().id, concat(deployment().name, 'networkwatcher'))]",
+    "roleAssignmentId": "[guid(resourceGroup().id, deployment().name, parameters('virtualMachinesResourceGroupName'))]",
+    "networkWatcherRoleAssignmentId": "[guid(resourceGroup().id, deployment().name, parameters('networkWatchersResourceGroupName'))]",
     "roleAssignmentsApiVersion": "2016-07-01",
     "msiApiVersion": "2015-08-31-PREVIEW",
     "eventGridApiVersion": "2018-01-01",
@@ -162,15 +162,15 @@
       },
       "SubscriptionId": {
         "Name": "SubscriptionId",
-        "Description": "The subscription id."
+        "Description": "The subscription id. For internal runbook use."
       },
       "TenantId": {
         "Name": "TenantId",
-        "Description": "The MSI tenant id."
+        "Description": "The MSI tenant id. For internal runbook use."
       },
       "MsiGetDefaultTokenEndpoint": {
         "Name": "MsiGetDefaultTokenEndpoint",
-        "Description": "The MSI token endpoint."
+        "Description": "The MSI token endpoint. For internal runbook use."
       },
       "MaxCaptureTimeInMinutes": {
         "Name": "MaxCaptureTimeInMinutes",
@@ -178,11 +178,11 @@
       },
       "NetworkWatcherStorageAccountName": {
         "Name": "NetworkWatcherStorageAccountName",
-        "Description": "The name of the Azure Storage Account where the Network Watcher packet capture logs will be written."
+        "Description": "The name of the Azure Storage Account where the Network Watcher packet capture logs will be written. For internal runbook use."
       },
       "NetworkWatcherStorageAccountResourceGroupName": {
         "Name": "NetworkWatcherStorageAccountResourceGroupName",
-        "Description": "The name of the Resource Group that contains the Azure Storage Account where the Network Watcher packet capture logs will be written."
+        "Description": "The name of the Resource Group that contains the Azure Storage Account where the Network Watcher packet capture logs will be written. For internal runbook use."
       },
       "NetworkWatcherResourceGroupName": {
         "Name": "NetworkWatcherResourceGroupName",
@@ -190,23 +190,23 @@
       },
       "ApplyRbacUrl": {
         "Name": "ApplyRbacUrl",
-        "Description": "The URL of the applyRbac template."
+        "Description": "The URL of the applyRbac template. For internal runbook use."
       },
       "RoleAssignmentsApiVersion": {
         "Name": "RoleAssignmentsApiVersion",
-        "Description": "The RBAC API version."
+        "Description": "The RBAC API version. For internal runbook use."
       },
       "MsiApiVersion": {
         "Name": "MsiApiVersion",
-        "Description": "The API version for MSI."
+        "Description": "The API version for MSI. For internal runbook use."
       },
       "FunctionAppIdentityResourceId": {
         "Name": "FunctionAppIdentityResourceId",
-        "Description": "The Principal Id of the function app."
+        "Description": "The Principal Id of the function app. For internal runbook use."
       },
       "PacketCaptureFilterProtocol": {
         "Name": "PacketCaptureFilterProtocol",
-        "Description": "The protocol of the packet capture filter. This can be either UDP or TCP."
+        "Description": "The protocol of the packet capture filter. This can be UDP, TCP or Any."
       },
       "PacketCaptureFilterRemoteIpAddress": {
         "Name": "PacketCaptureFilterRemoteIpAddress",
@@ -223,6 +223,14 @@
       "PacketCaptureFilterLocalPort": {
         "Name": "PacketCaptureFilterLocalPort",
         "Description": "The local port of the packet capture filter. This can be a single number or a port range. e.g. 1-65535."
+      },
+      "LastTargetResourceGroup": {
+        "Name": "LastTargetResourceGroup",
+        "Description": "The latest name of the resource group where new Storage Accounts whose usage is to be tracked will be created. For internal runbook use."
+      },
+      "LastNetworkWatcherResourceGroupName": {
+        "Name": "LastNetworkWatcherResourceGroupName",
+        "Description": "The latest name of the resource group where Network Watcher resources are created for the different regions. For internal runbook use."
       }
     }
   },
@@ -712,6 +720,42 @@
             "type": "string",
             "isEncrypted": false,
             "description": "[variables('automationVariables').PacketCaptureFilterLocalPort.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').LastTargetResourceGroup.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "LastTargetResourceGroupVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('virtualMachinesResourceGroupName'), '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').LastTargetResourceGroup.Description]"
+          }
+        },
+        {
+          "name": "[variables('automationVariables').LastNetworkWatcherResourceGroupName.Name]",
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "dependsOn": [
+            "[concat('Microsoft.Automation/automationAccounts/', variables('accountName'))]"
+          ],
+          "tags": {
+            "displayName": "LastNetworkWatcherResourceGroupNameVariable",
+            "solutionName": "StartNetworkWatcherSolution"
+          },
+          "properties": {
+            "value": "[concat('\"', parameters('networkWatchersResourceGroupName'), '\"')]",
+            "type": "string",
+            "isEncrypted": true,
+            "description": "[variables('automationVariables').LastNetworkWatcherResourceGroupName.Description]"
           }
         },
         {
